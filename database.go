@@ -36,10 +36,12 @@ func (s sqlite) Get(domain string) (string, bool, int, error) {
 		return "", false, 0, err
 	}
 	defer stmt.Close()
-	var destination string
+	var (
+		destination string
+		append      bool
+		code        int
+	)
 
-	var append bool
-	var code int
 	err = stmt.QueryRow(domain).Scan(&append, &destination, &code)
 
 	if err != nil {

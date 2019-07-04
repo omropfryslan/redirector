@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -27,6 +28,11 @@ func redirector(response http.ResponseWriter, request *http.Request, db Database
 }
 
 func main() {
+	var (
+		frontProxy = false
+		port       = "1337"
+	)
+
 	if os.Getenv("BASE_URL") == "" {
 		log.Fatal("BASE_URL environment variable must be set")
 	}
@@ -34,11 +40,25 @@ func main() {
 		log.Fatal("DB_PATH environment variable must be set")
 	}
 
+	if os.Getenv("FRONT_PROXY") != "" {
+		_frontproxy := os.Getenv("FRONT_PROXY")
+		frontProxy, _ = strconv.ParseBool(_frontproxy)
+	}
+
+	if os.Getenv("PORT") != "" {
+		port = os.Getenv("PORT")
+	}
+	port = ":" + port
+
 	db := sqlite{Path: path.Join(os.Getenv("DB_PATH"), "db.sqlite")}
 	db.Init()
 
 	baseURL := os.Getenv("BASE_URL")
 	r := mux.NewRouter()
+
+	if frontProxy {
+		r.Use(handlers.ProxyHeaders)
+	}
 
 	r.Host(baseURL).Path("/api/load").HandlerFunc(
 		func(response http.ResponseWriter, request *http.Request) {
@@ -62,13 +82,11 @@ func main() {
 			redirector(response, request, db)
 		})
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "1337"
+	logHandler := handlers.CombinedLoggingHandler(os.Stdout, r)
+	if frontProxy {
+		logHandler = handlers.CombinedLoggingHandler(os.Stdout, handlers.ProxyHeaders(r))
 	}
 
-	port = ":" + port
-
 	log.Println("Starting server on port " + port)
-	log.Fatal(http.ListenAndServe(port, handlers.LoggingHandler(os.Stdout, r)))
+	log.Fatal(http.ListenAndServe(port, logHandler))
 }
