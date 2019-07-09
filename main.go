@@ -27,6 +27,25 @@ func redirector(response http.ResponseWriter, request *http.Request, db Database
 	http.Redirect(response, request, realDestination, code)
 }
 
+// Set the URL.Host variable since handlers.ProxyHeaders does not.
+// https://github.com/gorilla/handlers/pull/96
+func setURLHost(h http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		xForwardedHost := http.CanonicalHeaderKey("X-Forwarded-Host")
+
+		if forwardedHost := r.Header.Get(xForwardedHost); forwardedHost != "" {
+			if r.URL.Host == "" {
+				r.URL.Host = forwardedHost
+			}
+		}
+
+		// Call the next handler in the chain.
+		h.ServeHTTP(w, r)
+	}
+
+	return http.HandlerFunc(fn)
+}
+
 func main() {
 	var (
 		frontProxy = false
@@ -58,24 +77,32 @@ func main() {
 
 	if frontProxy {
 		r.Use(handlers.ProxyHeaders)
+
+		r.Use(setURLHost)
 	}
 
-	r.Host(baseURL).Path("/api/load").HandlerFunc(
+	r.Path("/api/load").HandlerFunc(
 		func(response http.ResponseWriter, request *http.Request) {
 			loaddomains(response, request, db)
-		})
+		}).
+		Host(baseURL)
 
-	r.Host(baseURL).Path("/api/save").HandlerFunc(
+	r.Path("/api/save").HandlerFunc(
 		func(response http.ResponseWriter, request *http.Request) {
 			savedomain(response, request, db)
-		}).Methods("POST")
+		}).
+		Host(baseURL).
+		Methods("POST")
 
-	r.Host(baseURL).Path("/api/delete").HandlerFunc(
+	r.Path("/api/delete").HandlerFunc(
 		func(response http.ResponseWriter, request *http.Request) {
 			deletedomain(response, request, db)
-		}).Methods("POST")
+		}).
+		Host(baseURL).
+		Methods("POST")
 
-	r.Host(baseURL).Handler(http.FileServer(http.Dir("public")))
+	r.PathPrefix("/").Handler(http.FileServer(http.Dir("public"))).
+		Host(baseURL)
 
 	r.PathPrefix("/").HandlerFunc(
 		func(response http.ResponseWriter, request *http.Request) {
@@ -84,7 +111,7 @@ func main() {
 
 	logHandler := handlers.CombinedLoggingHandler(os.Stdout, r)
 	if frontProxy {
-		logHandler = handlers.CombinedLoggingHandler(os.Stdout, handlers.ProxyHeaders(r))
+		logHandler = handlers.CombinedLoggingHandler(os.Stdout, setURLHost(handlers.ProxyHeaders(r)))
 	}
 
 	log.Println("Starting server on port " + port)
