@@ -31,6 +31,8 @@ type Domain struct {
 
 func (s sqlite) Get(domain string) (string, bool, int, error) {
 	db, err := sql.Open("sqlite3", s.Path)
+	defer db.Close()
+
 	stmt, err := db.Prepare("select append, destination, code from sites where domain = ?")
 	if err != nil {
 		return "", false, 0, err
@@ -53,6 +55,7 @@ func (s sqlite) Get(domain string) (string, bool, int, error) {
 
 func (s sqlite) GetAll() ([]Domain, error) {
 	db, err := sql.Open("sqlite3", s.Path)
+	defer db.Close()
 	stmt, err := db.Query("select * from sites")
 	if err != nil {
 		return nil, err
@@ -79,6 +82,8 @@ func (s sqlite) GetAll() ([]Domain, error) {
 
 func (s sqlite) Save(domain Domain) (int64, error) {
 	db, err := sql.Open("sqlite3", s.Path)
+	defer db.Close()
+
 	tx, err := db.Begin()
 	if err != nil {
 		return 0, err
@@ -112,6 +117,8 @@ func (s sqlite) Save(domain Domain) (int64, error) {
 
 func (s sqlite) Delete(domain Domain) (int64, error) {
 	db, err := sql.Open("sqlite3", s.Path)
+	defer db.Close()
+
 	tx, err := db.Begin()
 	if err != nil {
 		return 0, err
@@ -140,14 +147,16 @@ func (s sqlite) Delete(domain Domain) (int64, error) {
 }
 
 func (s sqlite) Init() {
-	c, err := sql.Open("sqlite3", s.Path)
+	db, err := sql.Open("sqlite3", s.Path)
+
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer c.Close()
+
+	defer db.Close()
 	sqlStmt := `CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, domain VARCHAR (255) NOT NULL UNIQUE, append BOOLEAN, destination VARCHAR (255) NOT NULL, code INTEGER DEFAULT (301) NOT NULL);
 		CREATE INDEX IF NOT EXISTS domain ON sites (domain);`
-	_, err = c.Exec(sqlStmt)
+	_, err = db.Exec(sqlStmt)
 	if err != nil {
 		log.Fatal(err)
 	}
