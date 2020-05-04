@@ -105,7 +105,7 @@ func main() {
 		Host(baseURL).
 		Methods("POST")
 
-	r.PathPrefix("/").Handler(http.FileServer(http.Dir("public"))).
+	r.PathPrefix("/").Handler(http.FileServer(http.Dir("/public"))).
 		Host(baseURL)
 
 	r.PathPrefix("/").HandlerFunc(
