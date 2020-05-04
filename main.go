@@ -22,6 +22,10 @@ func redirector(response http.ResponseWriter, request *http.Request, db Database
 	realDestination := destination
 	if append {
 		realDestination += request.URL.Path
+
+		if len(request.URL.RawQuery) > 0 {
+			realDestination += "?" + request.URL.RawQuery
+		}
 	}
 
 	http.Redirect(response, request, realDestination, code)
